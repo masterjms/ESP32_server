@@ -7,12 +7,21 @@ const express = require("express");
 const WebSocket = require("ws");
 const readline = require("readline");
 
+// Config
 const HTTP_PORT = Number(process.env.HTTP_PORT || 8080);
 const WS_PORT = Number(process.env.WS_PORT || 9001);
 const MEDIA_DIR = process.env.MEDIA_DIR || path.join(__dirname, "media");
 const PUBLIC_DIR = process.env.PUBLIC_DIR || path.join(__dirname, "public");
 
+// HTTP server (static + API)
 const app = express();
+app.use(express.json({ limit: "256kb" }));
+app.use((req, _res, next) => {
+  if (req.method === "GET" && req.path.startsWith("/media/")) {
+    console.log(`[HTTP] ${req.method} ${req.path}`);
+  }
+  next();
+});
 app.use("/media", express.static(MEDIA_DIR));
 app.use("/", express.static(PUBLIC_DIR));
 
@@ -20,11 +29,36 @@ app.get("/api/clients", (_req, res) => {
   res.json({ clients: Array.from(clients.keys()) });
 });
 
+app.post("/api/send", (req, res) => {
+  const { target, payload } = req.body || {};
+  if (!target || !payload || typeof payload !== "object") {
+    res.status(400).json({ error: "missing target or payload" });
+    return;
+  }
+
+  if (payload.type === "live_start") {
+    const rtpIp = payload.rtp_ip;
+    const rtpPort = Number(payload.rtp_port);
+    const frameMs = Number(payload.frame_ms) || DEFAULT_FRAME_MS;
+    if (rtpIp && rtpPort) {
+      startLiveSender(target, rtpIp, rtpPort, frameMs);
+    }
+  }
+
+  if (payload.type === "live_stop") {
+    stopLiveSender(target);
+  }
+
+  sendTo(target, payload);
+  res.json({ ok: true });
+});
+
 const httpServer = http.createServer(app);
 httpServer.listen(HTTP_PORT, () => {
   console.log(`[HTTP] listening on :${HTTP_PORT}, media=${MEDIA_DIR}`);
 });
 
+// WebSocket server (control plane)
 const wsServer = http.createServer();
 const wss = new WebSocket.Server({ server: wsServer });
 
@@ -73,6 +107,7 @@ wsServer.listen(WS_PORT, () => {
   console.log(`[WS] listening on :${WS_PORT}`);
 });
 
+// WS send helpers
 function sendTo(targetId, payload) {
   if (targetId === "all") {
     for (const [id, ws] of clients.entries()) {
@@ -97,6 +132,7 @@ function makeSessionId(prefix) {
   return `${prefix}-${Date.now()}`;
 }
 
+// RTP/UDP dummy sender (LIVE)
 function buildRtpPacket(seq, timestamp, payload) {
   const header = Buffer.alloc(12);
   header[0] = 0x80;
@@ -132,13 +168,21 @@ function startLiveSender(key, rtpIp, rtpPort, frameMs) {
 
 function stopLiveSender(key) {
   if (key === "all") {
-    for (const k of Array.from(liveSenders.keys())) {
-      stopLiveSender(k);
+    for (const [k, sender] of Array.from(liveSenders.entries())) {
+      clearInterval(sender.interval);
+      sender.socket.close();
+      liveSenders.delete(k);
+      console.log(`[RTP] stopped sender for ${k}`);
     }
     return;
   }
   const sender = liveSenders.get(key);
   if (!sender) {
+    if (liveSenders.size > 0) {
+      console.log(`[RTP] sender not found for ${key}, stopping all`);
+      stopLiveSender("all");
+      return;
+    }
     console.log(`[RTP] sender not found for ${key}`);
     return;
   }
@@ -148,6 +192,7 @@ function stopLiveSender(key) {
   console.log(`[RTP] stopped sender for ${key}`);
 }
 
+// Terminal CLI
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,

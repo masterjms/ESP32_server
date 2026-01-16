@@ -5,14 +5,239 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PC Demo Server</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 24px; }
+    :root {
+      --bg: #f6f3ee;
+      --panel: #ffffff;
+      --ink: #222222;
+      --muted: #555555;
+      --accent: #007a5a;
+      --border: #e5dfd6;
+    }
+    body {
+      font-family: "Georgia", "Times New Roman", serif;
+      margin: 24px;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    h1 { margin: 0 0 8px; }
+    h2 { margin: 24px 0 8px; font-size: 18px; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 16px;
+      border-radius: 8px;
+      max-width: 920px;
+    }
     code { background: #f2f2f2; padding: 2px 4px; }
+    label { display: block; margin: 8px 0 4px; font-size: 14px; }
+    input, select, button, textarea {
+      font-family: inherit;
+      font-size: 14px;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #444444;
+    }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .row > * { flex: 1 1 auto; }
+    .muted { color: var(--muted); font-size: 13px; }
+    ul { margin: 0; padding-left: 18px; }
+    .status { margin-top: 8px; font-size: 13px; }
   </style>
 </head>
 <body>
   <h1>PC Demo Server</h1>
-  <p>Use the terminal CLI to send commands.</p>
-  <p>Media files are served from <code>/media</code>.</p>
-  <p>Clients list: <code>/api/clients</code></p>
+  <p class="muted">간단 UI (파일 재생/상태 요청/LIVE 송출)</p>
+
+  <div class="panel">
+    <h2>Server Info</h2>
+    <div class="row">
+      <div>
+        <div class="muted">HTTP base</div>
+        <div><code id="httpBase">-</code></div>
+      </div>
+      <div>
+        <div class="muted">WS URL</div>
+        <div><code id="wsUrl">-</code></div>
+      </div>
+      <div>
+        <div class="muted">ESP32 입력값</div>
+        <div><code id="esp32Hint">-</code></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Clients</h2>
+    <div class="row">
+      <button id="refreshClients">Refresh</button>
+      <select id="targetSelect">
+        <option value="all">all</option>
+      </select>
+    </div>
+    <div class="status" id="clientsStatus"></div>
+    <ul id="clientList"></ul>
+  </div>
+
+  <div class="panel">
+    <h2>File Play</h2>
+    <label for="fileUrl">MP3 URL</label>
+    <input id="fileUrl" type="text" placeholder="http://PC_IP:8080/media/voice001.mp3" />
+    <div class="row">
+      <button id="filePlayBtn">file_play</button>
+      <button id="fileStopBtn" class="secondary">file_stop</button>
+      <button id="statusReqBtn" class="secondary">status_req</button>
+    </div>
+    <div class="status" id="fileStatus"></div>
+  </div>
+
+  <div class="panel">
+    <h2>LIVE (Dummy RTP)</h2>
+    <label for="rtpIp">RTP Target IP</label>
+    <input id="rtpIp" type="text" placeholder="ESP32_IP" />
+    <label for="rtpPort">RTP Target Port</label>
+    <input id="rtpPort" type="number" value="4000" />
+    <div class="row">
+      <button id="liveStartBtn">live_start</button>
+      <button id="liveStopBtn" class="secondary">live_stop</button>
+    </div>
+    <div class="status" id="liveStatus"></div>
+  </div>
+
+  <script>
+    const httpBase = `${location.protocol}//${location.hostname}:${location.port || 8080}`;
+    const wsUrl = `ws://${location.hostname}:9001`;
+    const httpBaseEl = document.getElementById("httpBase");
+    const wsUrlEl = document.getElementById("wsUrl");
+    const esp32HintEl = document.getElementById("esp32Hint");
+
+    httpBaseEl.textContent = httpBase;
+    wsUrlEl.textContent = wsUrl;
+    esp32HintEl.textContent = `ws://${location.hostname}:9001/?device_id=DEVICE001`;
+
+    const clientListEl = document.getElementById("clientList");
+    const targetSelectEl = document.getElementById("targetSelect");
+    const clientsStatusEl = document.getElementById("clientsStatus");
+
+    const fileUrlEl = document.getElementById("fileUrl");
+    const fileStatusEl = document.getElementById("fileStatus");
+    const liveStatusEl = document.getElementById("liveStatus");
+    const rtpIpEl = document.getElementById("rtpIp");
+    const rtpPortEl = document.getElementById("rtpPort");
+
+    fileUrlEl.value = `${httpBase}/media/voice001.mp3`;
+
+    function setStatus(el, text) {
+      el.textContent = text;
+      setTimeout(() => {
+        if (el.textContent === text) el.textContent = "";
+      }, 4000);
+    }
+
+    async function refreshClients() {
+      clientsStatusEl.textContent = "loading...";
+      const res = await fetch("/api/clients");
+      const data = await res.json();
+      const clients = data.clients || [];
+
+      clientListEl.innerHTML = "";
+      targetSelectEl.innerHTML = '<option value="all">all</option>';
+
+      clients.forEach((id) => {
+        const li = document.createElement("li");
+        li.textContent = id;
+        clientListEl.appendChild(li);
+
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = id;
+        targetSelectEl.appendChild(opt);
+      });
+
+      clientsStatusEl.textContent = `clients: ${clients.length}`;
+    }
+
+    async function sendCommand(payload, statusEl) {
+      const target = targetSelectEl.value;
+      const res = await fetch("/api/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target, payload }),
+      });
+      if (!res.ok) {
+        setStatus(statusEl, "send failed");
+        return;
+      }
+      setStatus(statusEl, `sent to ${target}`);
+    }
+
+    document.getElementById("refreshClients").addEventListener("click", refreshClients);
+
+    document.getElementById("filePlayBtn").addEventListener("click", () => {
+      if (!fileUrlEl.value) {
+        setStatus(fileStatusEl, "missing url");
+        return;
+      }
+      sendCommand({
+        type: "file_play",
+        proto_ver: 1,
+        session_id: `file-${Date.now()}`,
+        url: fileUrlEl.value,
+        codec: "mp3",
+        auto_play: true,
+        store_policy: "cache",
+      }, fileStatusEl);
+    });
+
+    document.getElementById("fileStopBtn").addEventListener("click", () => {
+      sendCommand({
+        type: "file_stop",
+        proto_ver: 1,
+        session_id: `file-${Date.now()}`,
+      }, fileStatusEl);
+    });
+
+    document.getElementById("statusReqBtn").addEventListener("click", () => {
+      sendCommand({
+        type: "status_req",
+        proto_ver: 1,
+      }, fileStatusEl);
+    });
+
+    document.getElementById("liveStartBtn").addEventListener("click", () => {
+      if (!rtpIpEl.value || !rtpPortEl.value) {
+        setStatus(liveStatusEl, "missing rtp target");
+        return;
+      }
+      sendCommand({
+        type: "live_start",
+        proto_ver: 1,
+        session_id: `live-${Date.now()}`,
+        rtp_ip: rtpIpEl.value,
+        rtp_port: Number(rtpPortEl.value),
+        codec: "opus",
+        frame_ms: 20,
+        sample_rate: 16000,
+      }, liveStatusEl);
+    });
+
+    document.getElementById("liveStopBtn").addEventListener("click", () => {
+      sendCommand({
+        type: "live_stop",
+        proto_ver: 1,
+        session_id: `live-${Date.now()}`,
+      }, liveStatusEl);
+    });
+
+    refreshClients();
+  </script>
 </body>
 </html>
