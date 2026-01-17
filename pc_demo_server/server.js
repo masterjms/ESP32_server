@@ -1,17 +1,13 @@
 "use strict";
 
-const path = require("path");
 const http = require("http");
-const dgram = require("dgram");
 const express = require("express");
 const WebSocket = require("ws");
 const readline = require("readline");
 
-// Config
-const HTTP_PORT = Number(process.env.HTTP_PORT || 8080);
-const WS_PORT = Number(process.env.WS_PORT || 9001);
-const MEDIA_DIR = process.env.MEDIA_DIR || path.join(__dirname, "media");
-const PUBLIC_DIR = process.env.PUBLIC_DIR || path.join(__dirname, "public");
+const config = require("./config");
+const live = require("./live");
+const { registerRoutes } = require("./routes");
 
 // HTTP server (static + API)
 const app = express();
@@ -22,40 +18,12 @@ app.use((req, _res, next) => {
   }
   next();
 });
-app.use("/media", express.static(MEDIA_DIR));
-app.use("/", express.static(PUBLIC_DIR));
-
-app.get("/api/clients", (_req, res) => {
-  res.json({ clients: Array.from(clients.keys()) });
-});
-
-app.post("/api/send", (req, res) => {
-  const { target, payload } = req.body || {};
-  if (!target || !payload || typeof payload !== "object") {
-    res.status(400).json({ error: "missing target or payload" });
-    return;
-  }
-
-  if (payload.type === "live_start") {
-    const rtpIp = payload.rtp_ip;
-    const rtpPort = Number(payload.rtp_port);
-    const frameMs = Number(payload.frame_ms) || DEFAULT_FRAME_MS;
-    if (rtpIp && rtpPort) {
-      startLiveSender(target, rtpIp, rtpPort, frameMs);
-    }
-  }
-
-  if (payload.type === "live_stop") {
-    stopLiveSender(target);
-  }
-
-  sendTo(target, payload);
-  res.json({ ok: true });
-});
+app.use("/media", express.static(config.mediaDir));
+app.use("/", express.static(config.publicDir));
 
 const httpServer = http.createServer(app);
-httpServer.listen(HTTP_PORT, () => {
-  console.log(`[HTTP] listening on :${HTTP_PORT}, media=${MEDIA_DIR}`);
+httpServer.listen(config.httpPort, config.host, () => {
+  console.log(`[HTTP] listening on ${config.host}:${config.httpPort}, media=${config.mediaDir}`);
 });
 
 // WebSocket server (control plane)
@@ -64,12 +32,30 @@ const wss = new WebSocket.Server({ server: wsServer });
 
 const clients = new Map();
 let anonCounter = 1;
-const liveSenders = new Map();
-const RTP_PT_OPUS = 111;
-const RTP_SSRC = 0x12345678;
-const DEFAULT_FRAME_MS = 20;
-const DEFAULT_SAMPLE_RATE = 16000;
-const DUMMY_PAYLOAD_SIZE = 40;
+
+// WS send helper.
+function sendTo(targetId, payload) {
+  if (targetId === "all") {
+    for (const [id, ws] of clients.entries()) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(payload));
+        console.log(`[WS] -> ${id}`, payload);
+      }
+    }
+    return;
+  }
+
+  const ws = clients.get(targetId);
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    console.log(`[WS] target not connected: ${targetId}`);
+    return;
+  }
+  ws.send(JSON.stringify(payload));
+  console.log(`[WS] -> ${targetId}`, payload);
+}
+
+// API routes (UI, live control).
+registerRoutes(app, { clients, sendTo, live, config });
 
 wss.on("connection", (ws, req) => {
   const url = new URL(req.url || "", `http://${req.headers.host}`);
@@ -103,93 +89,13 @@ wss.on("connection", (ws, req) => {
   });
 });
 
-wsServer.listen(WS_PORT, () => {
-  console.log(`[WS] listening on :${WS_PORT}`);
+wsServer.listen(config.wsPort, config.host, () => {
+  console.log(`[WS] listening on ${config.host}:${config.wsPort}`);
 });
 
-// WS send helpers
-function sendTo(targetId, payload) {
-  if (targetId === "all") {
-    for (const [id, ws] of clients.entries()) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(payload));
-        console.log(`[WS] -> ${id}`, payload);
-      }
-    }
-    return;
-  }
-
-  const ws = clients.get(targetId);
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
-    console.log(`[WS] target not connected: ${targetId}`);
-    return;
-  }
-  ws.send(JSON.stringify(payload));
-  console.log(`[WS] -> ${targetId}`, payload);
-}
-
+// Simple session id generator for control messages.
 function makeSessionId(prefix) {
   return `${prefix}-${Date.now()}`;
-}
-
-// RTP/UDP dummy sender (LIVE)
-function buildRtpPacket(seq, timestamp, payload) {
-  const header = Buffer.alloc(12);
-  header[0] = 0x80;
-  header[1] = RTP_PT_OPUS & 0x7f;
-  header.writeUInt16BE(seq & 0xffff, 2);
-  header.writeUInt32BE(timestamp >>> 0, 4);
-  header.writeUInt32BE(RTP_SSRC >>> 0, 8);
-  return Buffer.concat([header, payload]);
-}
-
-function startLiveSender(key, rtpIp, rtpPort, frameMs) {
-  if (liveSenders.has(key)) {
-    console.log(`[RTP] sender already running for ${key}`);
-    return;
-  }
-
-  const socket = dgram.createSocket("udp4");
-  let seq = 1;
-  let timestamp = 0;
-  const frameSamples = Math.round((DEFAULT_SAMPLE_RATE * frameMs) / 1000);
-  const payload = Buffer.alloc(DUMMY_PAYLOAD_SIZE, 0x00);
-
-  const interval = setInterval(() => {
-    const packet = buildRtpPacket(seq, timestamp, payload);
-    socket.send(packet, rtpPort, rtpIp);
-    seq = (seq + 1) & 0xffff;
-    timestamp = (timestamp + frameSamples) >>> 0;
-  }, frameMs);
-
-  liveSenders.set(key, { socket, interval });
-  console.log(`[RTP] sending dummy opus to ${rtpIp}:${rtpPort} (${frameMs}ms)`);
-}
-
-function stopLiveSender(key) {
-  if (key === "all") {
-    for (const [k, sender] of Array.from(liveSenders.entries())) {
-      clearInterval(sender.interval);
-      sender.socket.close();
-      liveSenders.delete(k);
-      console.log(`[RTP] stopped sender for ${k}`);
-    }
-    return;
-  }
-  const sender = liveSenders.get(key);
-  if (!sender) {
-    if (liveSenders.size > 0) {
-      console.log(`[RTP] sender not found for ${key}, stopping all`);
-      stopLiveSender("all");
-      return;
-    }
-    console.log(`[RTP] sender not found for ${key}`);
-    return;
-  }
-  clearInterval(sender.interval);
-  sender.socket.close();
-  liveSenders.delete(key);
-  console.log(`[RTP] stopped sender for ${key}`);
 }
 
 // Terminal CLI
@@ -202,7 +108,7 @@ const rl = readline.createInterface({
 console.log("Commands:");
 console.log("  list");
 console.log("  send <device_id|all> <json>");
-console.log("  file_play <device_id|all> <url>");
+console.log("  file_play <device_id|all> <url> [cache|no-store]");
 console.log("  file_stop <device_id|all>");
 console.log("  live_start <device_id|all> <rtp_ip> <rtp_port>");
 console.log("  live_stop <device_id|all>");
@@ -243,6 +149,7 @@ rl.on("line", (line) => {
 
   if (cmd === "file_play") {
     const url = rest[0];
+    const storePolicy = rest[1] || "cache";
     if (!url) {
       console.log("missing url");
       rl.prompt();
@@ -255,7 +162,7 @@ rl.on("line", (line) => {
       url,
       codec: "mp3",
       auto_play: true,
-      store_policy: "cache",
+      store_policy: storePolicy === "no-store" ? "no-store" : "cache",
     });
     rl.prompt();
     return;
@@ -279,8 +186,8 @@ rl.on("line", (line) => {
       rl.prompt();
       return;
     }
-    const frameMs = DEFAULT_FRAME_MS;
-    startLiveSender(target, rtpIp, rtpPort, frameMs);
+    const frameMs = live.DEFAULT_FRAME_MS;
+    live.startLiveStream(target, rtpIp, rtpPort, frameMs, config);
     sendTo(target, {
       type: "live_start",
       proto_ver: 1,
@@ -289,14 +196,14 @@ rl.on("line", (line) => {
       rtp_port: rtpPort,
       codec: "opus",
       frame_ms: frameMs,
-      sample_rate: DEFAULT_SAMPLE_RATE,
+      sample_rate: live.DEFAULT_SAMPLE_RATE,
     });
     rl.prompt();
     return;
   }
 
   if (cmd === "live_stop") {
-    stopLiveSender(target);
+    live.stopLiveSender(target);
     sendTo(target, {
       type: "live_stop",
       proto_ver: 1,

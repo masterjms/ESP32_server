@@ -29,6 +29,7 @@ cd pc_demo_server
 npm install
 node server.js
 ```
+기본 바인딩은 `0.0.0.0`이며, 필요 시 `HOST` 환경변수로 변경할 수 있다.
 
 ## 서버 UI 들어가는 방법
 1) 서버 실행: `node server.js`
@@ -46,7 +47,68 @@ node server.js
 4) (선택) LIVE 외부 테스트 시 UDP 4000도 포워딩
 5) PC IP는 고정 IP 또는 DHCP 예약 권장
 
-## LIVE 테스트 방법(더미 RTP)
+## LIVE 테스트 방법(마이크 -> Opus -> RTP)
+### 사전 준비(FFmpeg)
+- FFmpeg 설치 필요
+- 환경변수 설정 필요
+  - `LIVE_MODE=ffmpeg`
+  - `LIVE_INPUT_DEVICE` 필수
+  - (선택) `LIVE_BITRATE` (기본 32000, 권장 24000~32000)
+  - (선택) `LIVE_INPUT_FORMAT`, `FFMPEG_BIN`
+
+### FFmpeg 설치(Windows)
+1) https://www.gyan.dev/ffmpeg/builds/ 에서 `ffmpeg-*-full_build.zip` 다운로드
+2) 압축 해제 후 `bin` 폴더를 PATH에 추가
+3) 새 터미널에서 `ffmpeg -version`으로 확인
+
+### 마이크 이름 확인(Windows)
+```powershell
+ffmpeg -hide_banner -list_devices true -f dshow -i dummy
+```
+
+### 마이크 지정(Windows PowerShell)
+```powershell
+$env:LIVE_MODE="ffmpeg"
+$env:LIVE_INPUT_FORMAT="dshow"
+$env:LIVE_INPUT_DEVICE='audio="마이크(ABKO N800)"'
+```
+
+대체 이름(Alternative name)을 쓸 때:
+```powershell
+$env:LIVE_INPUT_DEVICE='audio=@device_cm_{...}\\wave_{...}'
+```
+
+### FFmpeg 경로를 못 찾을 때
+```powershell
+$env:FFMPEG_BIN="C:\\path\\to\\ffmpeg.exe"
+```
+
+Windows 예시:
+```
+set LIVE_MODE=ffmpeg
+set LIVE_INPUT_FORMAT=dshow
+set LIVE_INPUT_DEVICE=audio="Microphone (Realtek(R) Audio)"
+```
+
+macOS 예시:
+```
+export LIVE_MODE=ffmpeg
+export LIVE_INPUT_FORMAT=avfoundation
+export LIVE_INPUT_DEVICE=:0
+```
+
+Linux 예시:
+```
+export LIVE_MODE=ffmpeg
+export LIVE_INPUT_FORMAT=alsa
+export LIVE_INPUT_DEVICE=default
+```
+
+더미 송출로 테스트하려면:
+```
+set LIVE_MODE=dummy
+```
+
 ### 1) 브라우저 UI로 테스트
 1) `RTP Target IP`에 테스트 수신 주소 입력
    - 로컬 테스트: `127.0.0.1`
@@ -54,7 +116,7 @@ node server.js
 3) `live_start` 클릭
 4) 서버 콘솔에 아래 로그 확인
 ```
-[RTP] sending dummy opus to 127.0.0.1:4000 (20ms)
+[RTP] sending opus via ffmpeg to 127.0.0.1:4000 (20ms)
 ```
 5) `live_stop` 클릭 후 송출 중단 로그 확인
 

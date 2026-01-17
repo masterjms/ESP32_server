@@ -5,133 +5,318 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PC Demo Server</title>
   <style>
+    @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap");
     :root {
-      --bg: #f6f3ee;
-      --panel: #ffffff;
-      --ink: #222222;
-      --muted: #555555;
-      --accent: #007a5a;
-      --border: #e5dfd6;
+      --bg: #0f1a1c;
+      --panel: #172326;
+      --panel-2: #1b2b2f;
+      --ink: #f2efe7;
+      --muted: #b9b2a6;
+      --accent: #f2a444;
+      --accent-2: #8fd3c7;
+      --border: #2a3a3e;
+      --glow: rgba(242, 164, 68, 0.25);
     }
+    * { box-sizing: border-box; }
     body {
-      font-family: "Georgia", "Times New Roman", serif;
-      margin: 24px;
-      background: var(--bg);
+      font-family: "Space Grotesk", "Segoe UI", sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(1200px 600px at 10% -20%, rgba(143, 211, 199, 0.18), transparent 60%),
+        radial-gradient(900px 500px at 90% 10%, rgba(242, 164, 68, 0.2), transparent 55%),
+        repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.02) 4px, transparent 4px, transparent 10px),
+        var(--bg);
       color: var(--ink);
+      padding: clamp(24px, 3vw, 48px);
     }
-    h1 { margin: 0 0 8px; }
-    h2 { margin: 24px 0 8px; font-size: 18px; }
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+      animation: rise-in 0.6s ease both;
+    }
+    h1 { margin: 0; font-size: clamp(28px, 2.4vw, 36px); letter-spacing: 0.5px; }
+    .subtitle { color: var(--muted); font-size: clamp(14px, 1.2vw, 16px); }
+    h2 { margin: 0 0 12px; font-size: clamp(16px, 1.2vw, 18px); text-transform: uppercase; letter-spacing: 1px; color: var(--accent-2); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: clamp(18px, 2vw, 26px);
+      max-width: min(1400px, 92vw);
+    }
     .panel {
-      background: var(--panel);
+      background: linear-gradient(160deg, var(--panel), var(--panel-2));
       border: 1px solid var(--border);
-      padding: 16px;
-      border-radius: 8px;
-      max-width: 920px;
+      padding: clamp(20px, 2vw, 28px);
+      border-radius: 14px;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02), 0 12px 30px rgba(0, 0, 0, 0.25);
+      animation: fade-up 0.6s ease both;
     }
-    code { background: #f2f2f2; padding: 2px 4px; }
-    label { display: block; margin: 8px 0 4px; font-size: 14px; }
+    .panel:nth-child(2) { animation-delay: 0.05s; }
+    .panel:nth-child(3) { animation-delay: 0.1s; }
+    .panel:nth-child(4) { animation-delay: 0.15s; }
+    code {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+    }
+    label { display: block; margin: 14px 0 8px; font-size: clamp(13px, 1vw, 14px); color: var(--muted); }
     input, select, button, textarea {
       font-family: inherit;
-      font-size: 14px;
-      padding: 6px 8px;
+      font-size: clamp(14px, 1.1vw, 15px);
+      padding: 10px 12px;
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: 10px;
+      background: rgba(8, 12, 13, 0.4);
+      color: var(--ink);
     }
+    input::placeholder { color: rgba(242, 239, 231, 0.4); }
     button {
       background: var(--accent);
-      color: #fff;
+      color: #1b1206;
       border: none;
       cursor: pointer;
+      box-shadow: 0 0 20px var(--glow);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
+    button:hover { transform: translateY(-1px); box-shadow: 0 0 26px var(--glow); }
     button.secondary {
-      background: #444444;
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--border);
+      box-shadow: none;
     }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    button.live-active {
+      background: var(--accent);
+      color: #1b1206;
+      box-shadow: 0 0 18px rgba(242, 164, 68, 0.55);
+      border: none;
+    }
+    button.tiny {
+      padding: 6px 10px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
     .row > * { flex: 1 1 auto; }
-    .muted { color: var(--muted); font-size: 13px; }
+    .row + .row { margin-top: 12px; }
+    .stack { margin-top: 16px; }
+    .muted { color: var(--muted); font-size: 12px; }
     ul { margin: 0; padding-left: 18px; }
-    .status { margin-top: 8px; font-size: 13px; }
+    .status { margin-top: 8px; font-size: 12px; color: var(--accent-2); }
+    .live-indicator {
+      color: var(--accent);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    .live-panel.active {
+      box-shadow:
+        0 0 0 1px rgba(242, 164, 68, 0.2),
+        0 0 30px rgba(242, 164, 68, 0.18),
+        0 12px 30px rgba(0, 0, 0, 0.25);
+    }
+    .live-signal {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .live-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #444;
+      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
+    }
+    .live-panel.active .live-dot {
+      background: #ff4d4d;
+      box-shadow: 0 0 10px rgba(255, 77, 77, 0.8);
+      animation: pulse 1.2s infinite ease-in-out;
+    }
+    .live-bars {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 4px;
+      height: 16px;
+      width: 120px;
+    }
+    .live-bars span {
+      display: block;
+      width: 100%;
+      height: 6px;
+      align-self: end;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 4px;
+    }
+    .live-panel.active .live-bars span {
+      background: linear-gradient(180deg, #40e0d0, #f2a444);
+      animation: bars 0.9s infinite ease-in-out;
+    }
+    .live-panel.active .live-bars span:nth-child(2) { animation-delay: 0.1s; }
+    .live-panel.active .live-bars span:nth-child(3) { animation-delay: 0.2s; }
+    .live-panel.active .live-bars span:nth-child(4) { animation-delay: 0.3s; }
+    .live-panel.active .live-bars span:nth-child(5) { animation-delay: 0.4s; }
+    .live-panel.active .live-bars span:nth-child(6) { animation-delay: 0.5s; }
+    .hidden { display: none; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .kv { display: grid; gap: 6px; }
+    @keyframes rise-in {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fade-up {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.25); opacity: 1; }
+    }
+    @keyframes bars {
+      0%, 100% { height: 6px; opacity: 0.5; }
+      50% { height: 16px; opacity: 1; }
+    }
   </style>
 </head>
 <body>
-  <h1>PC Demo Server</h1>
-  <p class="muted">간단 UI (파일 재생/상태 요청/LIVE 송출)</p>
+  <header>
+    <div>
+      <h1>PC Demo Server</h1>
+      <div class="subtitle">파일 재생/상태 요청/LIVE 송출 컨트롤 패널</div>
+    </div>
+    <div class="pill">LAN Control Panel</div>
+  </header>
 
-  <div class="panel">
-    <h2>Server Info</h2>
-    <div class="row">
-      <div>
-        <div class="muted">HTTP base</div>
-        <div><code id="httpBase">-</code></div>
-      </div>
-      <div>
-        <div class="muted">WS URL</div>
-        <div><code id="wsUrl">-</code></div>
-      </div>
-      <div>
-        <div class="muted">ESP32 입력값</div>
-        <div><code id="esp32Hint">-</code></div>
+  <div class="grid">
+    <div class="panel">
+      <h2>Server Info</h2>
+      <div class="kv">
+        <div>
+          <div class="muted">HTTP base</div>
+          <div><code id="httpBase">-</code></div>
+        </div>
+        <div>
+          <div class="muted">WS URL</div>
+          <div><code id="wsUrl">-</code></div>
+        </div>
+        <div>
+          <div class="muted">ESP32 입력값</div>
+          <div><code id="esp32Hint">-</code></div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="panel">
-    <h2>Clients</h2>
-    <div class="row">
-      <button id="refreshClients">Refresh</button>
-      <select id="targetSelect">
-        <option value="all">all</option>
+    <div class="panel">
+      <h2>Clients</h2>
+      <div class="row">
+        <button id="refreshClients">Refresh</button>
+        <select id="targetSelect">
+          <option value="all">all</option>
+        </select>
+      </div>
+      <div class="status" id="clientsStatus"></div>
+      <ul id="clientList"></ul>
+    </div>
+
+    <div class="panel">
+      <h2>File Play</h2>
+      <label for="fileUrl">MP3 URL</label>
+      <input id="fileUrl" type="text" placeholder="http://PC_IP:8080/media/voice001.mp3" />
+      <label for="storePolicy">Store Policy</label>
+      <select id="storePolicy">
+        <option value="cache">cache</option>
+        <option value="no-store">no-store</option>
       </select>
+      <div class="row">
+        <button id="filePlayBtn">file_play</button>
+        <button id="fileStopBtn" class="secondary">file_stop</button>
+        <button id="statusReqBtn" class="secondary">status_req</button>
+      </div>
+      <div class="status" id="fileStatus"></div>
     </div>
-    <div class="status" id="clientsStatus"></div>
-    <ul id="clientList"></ul>
-  </div>
 
-  <div class="panel">
-    <h2>File Play</h2>
-    <label for="fileUrl">MP3 URL</label>
-    <input id="fileUrl" type="text" placeholder="http://PC_IP:8080/media/voice001.mp3" />
-    <div class="row">
-      <button id="filePlayBtn">file_play</button>
-      <button id="fileStopBtn" class="secondary">file_stop</button>
-      <button id="statusReqBtn" class="secondary">status_req</button>
+    <div class="panel live-panel" id="livePanel">
+      <h2>LIVE (Opus RTP)</h2>
+      <label for="rtpIp">RTP Target IP</label>
+      <input id="rtpIp" type="text" placeholder="ESP32_IP" />
+      <label for="rtpPort">RTP Target Port</label>
+      <input id="rtpPort" type="number" value="4000" />
+      <label for="audioDevice">Microphone (FFmpeg input device)</label>
+      <input id="audioDevice" type="text" placeholder='audio="Microphone (Realtek(R) Audio)"' />
+      <div class="row stack">
+        <button id="applyLiveConfig" class="tiny">Apply</button>
+      </div>
+      <div class="row stack">
+        <button id="liveStartBtn">live_start</button>
+        <button id="liveStopBtn" class="secondary">live_stop</button>
+      </div>
+      <div class="live-signal">
+        <div class="live-dot"></div>
+        <div class="live-bars">
+          <span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="status live-indicator hidden" id="liveStatus">now streaming</div>
+      </div>
     </div>
-    <div class="status" id="fileStatus"></div>
-  </div>
-
-  <div class="panel">
-    <h2>LIVE (Dummy RTP)</h2>
-    <label for="rtpIp">RTP Target IP</label>
-    <input id="rtpIp" type="text" placeholder="ESP32_IP" />
-    <label for="rtpPort">RTP Target Port</label>
-    <input id="rtpPort" type="number" value="4000" />
-    <div class="row">
-      <button id="liveStartBtn">live_start</button>
-      <button id="liveStopBtn" class="secondary">live_stop</button>
-    </div>
-    <div class="status" id="liveStatus"></div>
   </div>
 
   <script>
-    const httpBase = `${location.protocol}//${location.hostname}:${location.port || 8080}`;
-    const wsUrl = `ws://${location.hostname}:9001`;
+    let httpBase = `${location.protocol}//${location.hostname}:${location.port || 8080}`;
+    let wsUrl = `ws://${location.hostname}:9001`;
     const httpBaseEl = document.getElementById("httpBase");
     const wsUrlEl = document.getElementById("wsUrl");
     const esp32HintEl = document.getElementById("esp32Hint");
 
-    httpBaseEl.textContent = httpBase;
-    wsUrlEl.textContent = wsUrl;
-    esp32HintEl.textContent = `ws://${location.hostname}:9001/?device_id=DEVICE001`;
+    async function refreshServerInfo() {
+      try {
+        const res = await fetch("/api/server_info");
+        const info = await res.json();
+        const host = info.public_host || (info.addresses && info.addresses[0]) || location.hostname;
+        const httpPort = info.http_port || 8080;
+        const wsPort = info.ws_port || 9001;
+        httpBase = `${location.protocol}//${host}:${httpPort}`;
+        wsUrl = `ws://${host}:${wsPort}`;
+        httpBaseEl.textContent = httpBase;
+        wsUrlEl.textContent = wsUrl;
+        esp32HintEl.textContent = `ws://${host}:${wsPort}/?device_id=DEVICE001`;
+        fileUrlEl.value = `${httpBase}/media/voice001.mp3`;
+      } catch (err) {
+        httpBaseEl.textContent = httpBase;
+        wsUrlEl.textContent = wsUrl;
+        esp32HintEl.textContent = `ws://${location.hostname}:9001/?device_id=DEVICE001`;
+      }
+    }
 
     const clientListEl = document.getElementById("clientList");
     const targetSelectEl = document.getElementById("targetSelect");
     const clientsStatusEl = document.getElementById("clientsStatus");
 
     const fileUrlEl = document.getElementById("fileUrl");
+    const storePolicyEl = document.getElementById("storePolicy");
     const fileStatusEl = document.getElementById("fileStatus");
     const liveStatusEl = document.getElementById("liveStatus");
+    const liveStopBtn = document.getElementById("liveStopBtn");
+    const livePanelEl = document.getElementById("livePanel");
     const rtpIpEl = document.getElementById("rtpIp");
     const rtpPortEl = document.getElementById("rtpPort");
+    const audioDeviceEl = document.getElementById("audioDevice");
 
     fileUrlEl.value = `${httpBase}/media/voice001.mp3`;
 
@@ -140,6 +325,33 @@
       setTimeout(() => {
         if (el.textContent === text) el.textContent = "";
       }, 4000);
+    }
+
+    let currentInputFormat = "dshow";
+
+    async function refreshLiveConfig() {
+      const res = await fetch("/api/live_config");
+      if (!res.ok) return;
+      const cfg = await res.json();
+      if (cfg.input_format) currentInputFormat = cfg.input_format;
+      if (cfg.input_device) audioDeviceEl.value = cfg.input_device;
+    }
+
+    async function applyLiveConfig() {
+      const payload = {
+        input_format: currentInputFormat,
+        input_device: audioDeviceEl.value || "",
+      };
+      const res = await fetch("/api/live_config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        setStatus(liveStatusEl, "apply failed");
+        return;
+      }
+      setStatus(liveStatusEl, "config updated");
     }
 
     async function refreshClients() {
@@ -193,7 +405,7 @@
         url: fileUrlEl.value,
         codec: "mp3",
         auto_play: true,
-        store_policy: "cache",
+        store_policy: storePolicyEl.value,
       }, fileStatusEl);
     });
 
@@ -237,7 +449,32 @@
       }, liveStatusEl);
     });
 
-    refreshClients();
+    async function refreshLiveStatus() {
+      const target = targetSelectEl.value;
+      const res = await fetch(`/api/live_status?target=${encodeURIComponent(target)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.running) {
+        liveStatusEl.classList.remove("hidden");
+        liveStopBtn.classList.add("live-active");
+        livePanelEl.classList.add("active");
+      } else {
+        liveStatusEl.classList.add("hidden");
+        liveStopBtn.classList.remove("live-active");
+        livePanelEl.classList.remove("active");
+      }
+    }
+
+    document.getElementById("applyLiveConfig").addEventListener("click", applyLiveConfig);
+
+    async function init() {
+      refreshServerInfo();
+      refreshClients();
+      await refreshLiveConfig();
+    setInterval(refreshLiveStatus, 500);
+    }
+
+    init();
   </script>
 </body>
 </html>
