@@ -59,7 +59,8 @@ function startFfmpegSender(key, rtpIp, rtpPort, frameMs, config) {
     return;
   }
 
-  const inputArgs = ["-f", config.liveInputFormat, "-i", config.liveInputDevice];
+  const inputDevice = normalizeInputDevice(config.liveInputDevice);
+  const inputArgs = ["-f", config.liveInputFormat, "-i", inputDevice];
   const args = [
     "-hide_banner",
     "-loglevel",
@@ -80,8 +81,6 @@ function startFfmpegSender(key, rtpIp, rtpPort, frameMs, config) {
     "constrained",
     "-frame_duration",
     String(frameMs),
-    "-payload_type",
-    String(RTP_PT_OPUS),
     "-f",
     "rtp",
     `rtp://${rtpIp}:${rtpPort}`,
@@ -114,6 +113,15 @@ function startLiveStream(key, rtpIp, rtpPort, frameMs, config) {
     return;
   }
   startFfmpegSender(key, rtpIp, rtpPort, frameMs, config);
+}
+
+function normalizeInputDevice(input) {
+  const trimmed = input.trim();
+  const match = trimmed.match(/^audio=\"(.+)\"$/);
+  if (match) {
+    return `audio=${match[1]}`;
+  }
+  return trimmed;
 }
 
 // Stop one or all LIVE senders.
