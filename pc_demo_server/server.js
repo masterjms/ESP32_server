@@ -56,6 +56,7 @@ function sendTo(targetId, payload) {
 
 // API routes (UI, live control).
 registerRoutes(app, { clients, sendTo, live, config });
+live.initRtpDebug(config);
 
 wss.on("connection", (ws, req) => {
   const url = new URL(req.url || "", `http://${req.headers.host}`);

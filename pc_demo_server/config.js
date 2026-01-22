@@ -18,6 +18,8 @@ const config = {
       ? "avfoundation"
       : "alsa"),
   liveInputDevice: process.env.LIVE_INPUT_DEVICE || "",
+  rtpDebug: process.env.RTP_DEBUG === "1",
+  rtpDebugPort: Number(process.env.RTP_DEBUG_PORT || 4000),
   mediaDir: process.env.MEDIA_DIR || path.join(__dirname, "media"),
   publicDir: process.env.PUBLIC_DIR || path.join(__dirname, "public"),
 };
