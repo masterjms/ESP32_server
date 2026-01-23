@@ -1,5 +1,6 @@
 import argparse
 import sys
+import io
 import subprocess
 import sounddevice as sd
 import numpy as np
@@ -10,6 +11,12 @@ SAMPLE_RATE = 16000
 CHANNELS = 1
 FRAME_MS = 20
 BLOCK_SIZE = int(SAMPLE_RATE * FRAME_MS / 1000)
+
+# Windows pipe stdout UTF-8 fix
+try:
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+except Exception:
+    pass
 
 def list_devices():
     """시스템 오디오 장치 목록을 JSON으로 반환"""
@@ -22,7 +29,7 @@ def list_devices():
                 "index": i,
                 "name": dev['name']
             })
-    return json.dumps(input_devices)
+    return json.dumps(input_devices, ensure_ascii=False)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -47,7 +54,7 @@ def main():
             sys.exit(0)
         except Exception as e:
             # JSON 포맷 에러 방지용
-            print(json.dumps({"error": str(e)}))
+            print(json.dumps({"error": str(e)}, ensure_ascii=False))
             sys.exit(1)
 
     # [수정 4] 송출 모드인데 IP가 없으면 에러 발생

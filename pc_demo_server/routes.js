@@ -5,14 +5,31 @@ module.exports.registerRoutes = function(app, ctx) {
 
     // [API] 오디오 입력 장치 목록 조회
     app.get("/api/audio_devices", (req, res) => {
-      const pythonBin = process.platform === "win32" ? "python" : "python3";
       const { spawn } = require("child_process");
-      
-      // 파이썬에 --list_devices 인자를 주어 실행
-      const proc = spawn(pythonBin, ["mic_sender.py", "--list_devices"]);
+      const path = require("path");
+      const fs = require("fs");
+
+      const isPkg = !!process.pkg;
+      const baseDir = isPkg ? path.dirname(process.execPath) : process.cwd();
+      const exeName = process.platform === "win32" ? "mic_sender.exe" : "mic_sender";
+      const exePath = path.join(baseDir, exeName);
+      const pyPath = path.join(baseDir, "mic_sender.py");
+
+      let cmd;
+      let args;
+      if (fs.existsSync(exePath)) {
+        cmd = exePath;
+        args = ["--list_devices"];
+      } else {
+        cmd = process.platform === "win32" ? "python" : "python3";
+        args = [pyPath, "--list_devices"];
+      }
+
+      console.log(`[AudioDevices] mic_sender path: ${cmd}`);
+      const proc = spawn(cmd, args, { cwd: baseDir });
       
       let output = "";
-      proc.stdout.on("data", (data) => { output += data.toString(); });
+      proc.stdout.on("data", (data) => { output += data.toString("utf8"); });
       proc.on("close", () => {
           try {
               const devices = JSON.parse(output);
