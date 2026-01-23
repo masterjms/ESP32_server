@@ -1,147 +1,98 @@
-# PC Demo Server
+# Audio Server Controller (PC Demo Server)
 
-ESP32-P4/C6 데모용 PC 서버. WebSocket으로 명령을 push하고, HTTP로 MP3 파일을 제공한다.
+ESP32 단말을 LAN에서 제어/테스트하기 위한 PC 데모 서버.  
+WS(Control) + HTTP(File) + LIVE RTP 송출(마이크 → Opus → RTP)을 제공한다.
 
-## 서버 UI 설명
-- Server Info: 현재 서버 접속 주소(HTTP/WS)와 ESP32 입력용 WS URL 표시
-- Clients: `/api/clients`를 호출해 접속 중 단말 리스트 확인
-- File Play: `file_play`, `file_stop`, `status_req` 버튼 제공
-- LIVE: 더미 RTP 송출을 `live_start/live_stop` 버튼으로 제어
+## 주요 기능
+- WS 제어 서버 (단말 접속/명령 push)
+- HTTP 파일 서버 (`/media`)
+- 웹 UI (단말 선택, file_play, live_start/stop, 마이크 선택, 볼륨 조절)
+- LIVE RTP 송출: `mic_sender.exe` 기반 Opus RTP
+- Windows exe 배포 및 설치 프로그램(Inno Setup)
 
-## 구현된 부분
-- WS 제어 서버: 단말 접속/명령 push
-- HTTP 파일 서버: `/media` 정적 파일 제공
-- 웹 UI: 단말 목록/명령 전송 버튼 제공
-- 터미널 CLI: `file_play`, `file_stop`, `live_start`, `live_stop`, `status_req`
-- `/api/clients`: 현재 접속 중인 단말 목록 JSON 반환
-- 더미 RTP/UDP 송출: `live_start` 시 20ms 주기로 RTP 패킷 송출
-- HTTP 다운로드 로그: `/media` 요청이 들어오면 콘솔에 출력
+## 폴더 구조 (개발)
+```
+audio_server/
+├─ pc_demo_server/
+│  ├─ server.js
+│  ├─ routes.js
+│  ├─ live.js
+│  ├─ mic_sender.py
+│  ├─ public/
+│  └─ media/
+├─ AudioServer.iss
+```
 
-## 미구현/제약(데모 한정)
-- 실제 Opus 프레임 송출(현재는 더미 payload)
-- 다중 단말 동시 LIVE 송출 자동 분기
-- 인증/토큰/보안(WSS, ACL 등)
-- 상태 보고 수집/저장(로그 출력만)
-
-## 빠른 시작
+## 빠른 시작 (소스 실행)
 ```bash
 cd pc_demo_server
 npm install
 node server.js
 ```
-기본 바인딩은 `0.0.0.0`이며, 필요 시 `HOST` 환경변수로 변경할 수 있다.
+브라우저: `http://localhost:8080`
 
-## 서버 UI 들어가는 방법
-1) 서버 실행: `node server.js`
-2) 브라우저 접속:
-   - 로컬: `http://localhost:8080/`
-   - LAN: `http://PC_IP:8080/`
-3) 상단에 표시된 `ESP32 입력값`을 단말 설정에 사용
+## API 개요 (UI 내부에서 사용)
+- `GET /api/devices` : 접속 단말 리스트
+- `POST /api/file_play` : file_play 전송
+- `POST /api/file_stop` : file_stop 전송
+- `POST /api/live_start` : live_start 전송 + mic_sender 실행
+- `POST /api/live_stop` : live_stop 전송 + mic_sender 종료
+- `POST /api/disconnect` : 단말 연결 강제 종료
+- `GET /api/audio_devices` : 마이크 목록
 
-## 포트포워딩 설정 방법(원격 접속 시)
-1) 공유기 관리자 페이지 접속 (예: `http://192.168.0.1`)
-2) 포트포워딩/NAT/가상서버 메뉴 진입
-3) 규칙 추가
-   - TCP 8080 -> PC_IP:8080 (HTTP)
-   - TCP 9001 -> PC_IP:9001 (WS)
-4) (선택) LIVE 외부 테스트 시 UDP 4000도 포워딩
-5) PC IP는 고정 IP 또는 DHCP 예약 권장
+## LIVE 송출 개요
+- 서버는 `mic_sender.exe`(또는 `mic_sender.py`)를 실행해 RTP 송출
+- 기본 RTP 포트: 4000
+- 볼륨: UI 슬라이더 값 → `--volume` 인자로 전달
 
-## LIVE 테스트 방법(마이크 -> Opus -> RTP)
-### 사전 준비(FFmpeg)
-- FFmpeg 설치 필요
-- 환경변수 설정 필요
-  - `LIVE_MODE=ffmpeg`
-  - `LIVE_INPUT_DEVICE` 필수
-  - (선택) `LIVE_BITRATE` (기본 32000, 권장 24000~32000)
-  - (선택) `LIVE_INPUT_FORMAT`, `FFMPEG_BIN`
+## 배포 폴더 구조 (예: AudioServer_v1.0)
+아래 구조로 **모든 파일을 동일 루트**에 배치:
+```
+AudioServer_v1.0/
+├─ server.exe
+├─ mic_sender.exe
+├─ ffmpeg.exe
+├─ public/
+└─ media/
+```
 
-### FFmpeg 설치(Windows)
-1) https://www.gyan.dev/ffmpeg/builds/ 에서 `ffmpeg-*-full_build.zip` 다운로드
-2) 압축 해제 후 `bin` 폴더를 PATH에 추가
-3) 새 터미널에서 `ffmpeg -version`으로 확인
-
-### 마이크 이름 확인(Windows)
+## Windows 빌드 & 배포
+### 1) 빌드/패키징 스크립트
+PowerShell에서 실행:
 ```powershell
-ffmpeg -hide_banner -list_devices true -f dshow -i dummy
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+cd pc_demo_server
+.\build_release.ps1 -Version "v1.0" -FfmpegPath "C:\path\to\ffmpeg.exe"
 ```
+출력 폴더: `..\AudioServer_v1.0` (pc_demo_server 상위)
 
-### 마이크 지정(Windows PowerShell)
+### 2) server.exe 수동 빌드 (pkg)
 ```powershell
-$env:LIVE_MODE="ffmpeg"
-$env:LIVE_INPUT_FORMAT="dshow"
-$env:LIVE_INPUT_DEVICE='audio="마이크(ABKO N800)"'
+cd pc_demo_server
+npx pkg server.js --targets node18-win-x64 --output server.exe --assets "public/**/*" --assets "media/**/*"
 ```
 
-대체 이름(Alternative name)을 쓸 때:
+### 3) mic_sender.exe 수동 빌드 (PyInstaller)
 ```powershell
-$env:LIVE_INPUT_DEVICE='audio=@device_cm_{...}\\wave_{...}'
+cd pc_demo_server
+py -m pip install pyinstaller
+py -m PyInstaller mic_sender.spec
 ```
 
-### FFmpeg 경로를 못 찾을 때
-```powershell
-$env:FFMPEG_BIN="C:\\path\\to\\ffmpeg.exe"
-```
+## 설치 프로그램(Inno Setup)
+루트의 `AudioServer.iss` 사용:
+1) `AudioServer_v1.0` 폴더의 파일들이 최신인지 확인  
+2) Inno Setup에서 `.iss` 열고 컴파일  
+3) 생성된 `Setup.exe` 배포
 
-Windows 예시:
-```
-set LIVE_MODE=ffmpeg
-set LIVE_INPUT_FORMAT=dshow
-set LIVE_INPUT_DEVICE=audio="Microphone (Realtek(R) Audio)"
-```
+## 환경변수
+- `HTTP_PORT` / `WS_PORT` / `HOST`
+- `PUBLIC_HOST`
+- `FFMPEG_BIN` (ffmpeg.exe 직접 지정)
+- `MIC_SENDER_BIN` (mic_sender.exe 직접 지정)
+- `LIVE_INPUT_DEVICE` (마이크 ID)
 
-macOS 예시:
-```
-export LIVE_MODE=ffmpeg
-export LIVE_INPUT_FORMAT=avfoundation
-export LIVE_INPUT_DEVICE=:0
-```
+## 동작 팁
+- `server.exe`는 실행 직후 브라우저를 자동으로 열도록 설정됨.
+- 서버는 exe 실행 경로 기준으로 `public/` 및 `media/`를 찾는다.
 
-Linux 예시:
-```
-export LIVE_MODE=ffmpeg
-export LIVE_INPUT_FORMAT=alsa
-export LIVE_INPUT_DEVICE=default
-```
-
-더미 송출로 테스트하려면:
-```
-set LIVE_MODE=dummy
-```
-
-### 1) 브라우저 UI로 테스트
-1) `RTP Target IP`에 테스트 수신 주소 입력
-   - 로컬 테스트: `127.0.0.1`
-2) `RTP Target Port`에 `4000` 입력
-3) `live_start` 클릭
-4) 서버 콘솔에 아래 로그 확인
-```
-[RTP] sending opus via ffmpeg to 127.0.0.1:4000 (20ms)
-```
-5) `live_stop` 클릭 후 송출 중단 로그 확인
-
-### 2) 터미널에서 수신 확인(로컬)
-```bash
-node -e "const d=require('dgram');const s=d.createSocket('udp4');s.on('message',(m)=>console.log('len',m.length,'head',m.slice(0,12).toString('hex')));s.bind(4000,()=>console.log('udp listen 4000'));"
-```
-- `live_start` 이후 `len ... head ...` 로그가 계속 나오면 송출 성공
-
-## 터미널 CLI 사용 방법
-```text
-demo> list
-demo> file_play DEVICE001 http://PC_IP:8080/media/voice001.mp3
-demo> file_stop DEVICE001
-demo> live_start DEVICE001 192.168.0.10 4000
-demo> live_stop DEVICE001
-demo> status_req DEVICE001
-```
-
-## 단말 접속 예시
-```
-ws://PC_IP:9001/?device_id=DEVICE001
-```
-
-## HTTP 파일 경로
-```
-http://PC_IP:8080/media/voice001.mp3
-```
