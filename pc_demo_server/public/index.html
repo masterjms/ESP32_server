@@ -3,6 +3,725 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Audio Controller</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap");
+    :root {
+      --bg: #0f1a1c;
+      --panel: #172326;
+      --panel-2: #1b2b2f;
+      --ink: #f2efe7;
+      --muted: #b9b2a6;
+      --accent: #f2a444;
+      --accent-2: #8fd3c7;
+      --danger: #ff4d4d;
+      --border: #2a3a3e;
+      --glow: rgba(242, 164, 68, 0.25);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Space Grotesk", "Segoe UI", sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(1200px 600px at 10% -20%, rgba(143, 211, 199, 0.18), transparent 60%),
+        radial-gradient(900px 500px at 90% 10%, rgba(242, 164, 68, 0.2), transparent 55%),
+        repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.02) 4px, transparent 4px, transparent 10px),
+        var(--bg);
+      color: var(--ink);
+      padding: clamp(28px, 4vw, 64px);
+    }
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+      animation: rise-in 0.6s ease both;
+    }
+    .header-meta {
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: right;
+    }
+    .header-meta .meta-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    h1 { margin: 0; font-size: clamp(32px, 2.8vw, 42px); letter-spacing: 0.6px; }
+    .subtitle { color: var(--muted); font-size: clamp(15px, 1.4vw, 18px); }
+    h2 { margin: 0 0 14px; font-size: clamp(18px, 1.4vw, 20px); text-transform: uppercase; letter-spacing: 1.2px; color: var(--accent-2); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+      gap: clamp(22px, 2.6vw, 34px);
+      max-width: min(1600px, 94vw);
+    }
+    .panel {
+      background: linear-gradient(165deg, rgba(23, 35, 38, 0.9), rgba(14, 22, 24, 0.96));
+      border: 1px solid rgba(42, 58, 62, 0.9);
+      padding: clamp(26px, 2.6vw, 36px);
+      border-radius: 18px;
+      min-height: 340px;
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+        0 18px 40px rgba(0, 0, 0, 0.35);
+      animation: fade-up 0.6s ease both;
+    }
+    .panel:nth-child(2) { animation-delay: 0.05s; }
+    .panel:nth-child(3) { animation-delay: 0.1s; }
+    .panel:nth-child(4) { animation-delay: 0.15s; }
+    
+    code {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+    }
+    label { display: block; margin: 14px 0 8px; font-size: clamp(13px, 1vw, 14px); color: var(--muted); }
+    input, select, button, textarea {
+      font-family: inherit;
+      font-size: clamp(15px, 1.2vw, 16px);
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(8, 12, 13, 0.4);
+      color: var(--ink);
+    }
+    input::placeholder { color: rgba(242, 239, 231, 0.4); }
+    
+    button {
+      background: var(--accent);
+      color: #1b1206;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 0 20px var(--glow);
+      transition: all 0.15s ease;
+      font-weight: 600;
+    }
+    button:hover { transform: translateY(-1px); box-shadow: 0 0 26px var(--glow); }
+    button:active { transform: translateY(1px); }
+    
+    button.secondary {
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--border);
+      box-shadow: none;
+    }
+    button.secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+    button.danger {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid var(--danger);
+      box-shadow: none;
+    }
+    button.danger:hover { background: var(--danger); color: white; box-shadow: 0 0 15px rgba(255, 77, 77, 0.4); }
+
+    button.live-active {
+      background: var(--danger);
+      color: white;
+      box-shadow: 0 0 18px rgba(255, 77, 77, 0.55);
+      border: none;
+      animation: pulse-red 2s infinite;
+    }
+
+    button.tiny {
+      padding: 6px 10px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+
+    /* --- Device Cards Style --- */
+    .device-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+      margin-bottom: 15px;
+    }
+    .device-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .device-row.connected {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px rgba(242, 164, 68, 0.2);
+      cursor: pointer;
+    }
+    .device-row.selected {
+      background: rgba(242, 164, 68, 0.12);
+    }
+    .device-label {
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .device-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 13px;
+      color: var(--muted);
+      user-select: none;
+    }
+    .device-status {
+      font-size: 12px;
+      color: var(--accent-2);
+    }
+    .device-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .device-ip-text {
+      font-size: 14px;
+      color: var(--ink);
+    }
+    .selected-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .selected-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(242, 164, 68, 0.4);
+      background: rgba(242, 164, 68, 0.14);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+      color: var(--ink);
+    }
+    .pill-remove {
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .pill-remove:hover { color: var(--danger); }
+    .trash-btn {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .trash-btn:hover {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    /* --- Layout Utils --- */
+    .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+    .row > * { flex: 1 1 auto; }
+    .stack { margin-top: 16px; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .kv { display: grid; gap: 6px; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .status { margin-top: 8px; font-size: 12px; color: var(--accent-2); height: 1.2em;}
+    .hidden { display: none; }
+    .wide-input { width: 100%; }
+
+    /* --- Live Animations --- */
+    .live-panel.active {
+      box-shadow:
+        0 0 0 1px rgba(242, 164, 68, 0.2),
+        0 0 30px rgba(242, 164, 68, 0.18),
+        0 12px 30px rgba(0, 0, 0, 0.25);
+    }
+    .live-signal {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .range-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .range-row input[type="range"] {
+      flex: 1 1 auto;
+    }
+    .range-value {
+      min-width: 44px;
+      text-align: right;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .live-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #444;
+      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
+    }
+    .live-panel.active .live-dot {
+      background: #ff4d4d;
+      box-shadow: 0 0 10px rgba(255, 77, 77, 0.8);
+      animation: pulse 1.2s infinite ease-in-out;
+    }
+    .live-bars {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 4px;
+      height: 16px;
+      width: 120px;
+    }
+    .live-bars span {
+      display: block;
+      width: 100%;
+      height: 6px;
+      align-self: end;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 4px;
+    }
+    .live-panel.active .live-bars span {
+      background: linear-gradient(180deg, #40e0d0, #f2a444);
+      animation: bars 0.9s infinite ease-in-out;
+    }
+    .live-panel.active .live-bars span:nth-child(2) { animation-delay: 0.1s; }
+    .live-panel.active .live-bars span:nth-child(3) { animation-delay: 0.2s; }
+    .live-panel.active .live-bars span:nth-child(4) { animation-delay: 0.3s; }
+    .live-panel.active .live-bars span:nth-child(5) { animation-delay: 0.4s; }
+    .live-panel.active .live-bars span:nth-child(6) { animation-delay: 0.5s; }
+
+    @keyframes rise-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fade-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.25); opacity: 1; } }
+    @keyframes pulse-red { 0%, 100% { box-shadow: 0 0 10px rgba(255,77,77,0.4); } 50% { box-shadow: 0 0 25px rgba(255,77,77,0.8); } }
+    @keyframes bars { 0%, 100% { height: 6px; opacity: 0.5; } 50% { height: 16px; opacity: 1; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Audio Controller</h1>
+      <div class="subtitle">Multi-Device Live & Media Control</div>
+    </div>
+    <div class="header-meta">
+      <div class="meta-row">
+        <span>HTTP</span>
+        <code id="httpBase">-</code>
+      </div>
+      <div class="meta-row">
+        <span>WebSocket</span>
+        <code id="wsUrl">-</code>
+      </div>
+      <div class="pill">v2.0 Hybrid</div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="panel">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h2>Clients</h2>
+          <button id="refreshClients" class="secondary tiny">새로고침</button>
+      </div>
+      <div class="muted" style="font-size:12px; margin-bottom:6px;"><code id="connCount">0</code> 개 단말 연결됨 (클릭하여 선택)</div>
+
+      <div id="deviceGrid" class="device-list">
+        <div class="device-row" data-slot="0">
+          <div class="device-label">device-1</div>
+          <div class="device-actions">
+            <span class="device-meta device-ip-text">연결안됨</span>
+            <span class="device-status hidden">연결됨!</span>
+            <button class="trash-btn" data-slot="0" disabled>Disconnect</button>
+          </div>
+        </div>
+        <div class="device-row" data-slot="1">
+          <div class="device-label">device-2</div>
+          <div class="device-actions">
+            <span class="device-meta device-ip-text">연결안됨</span>
+            <span class="device-status hidden">연결됨!</span>
+            <button class="trash-btn" data-slot="1" disabled>Disconnect</button>
+          </div>
+        </div>
+        <div class="device-row" data-slot="2">
+          <div class="device-label">device-3</div>
+          <div class="device-actions">
+            <span class="device-meta device-ip-text">연결안됨</span>
+            <span class="device-status hidden">연결됨!</span>
+            <button class="trash-btn" data-slot="2" disabled>Disconnect</button>
+          </div>
+        </div>
+        <div class="device-row" data-slot="3">
+          <div class="device-label">device-4</div>
+          <div class="device-actions">
+            <span class="device-meta device-ip-text">연결안됨</span>
+            <span class="device-status hidden">연결됨!</span>
+            <button class="trash-btn" data-slot="3" disabled>Disconnect</button>
+          </div>
+        </div>
+        <div class="device-row" data-slot="4">
+          <div class="device-label">device-5</div>
+          <div class="device-actions">
+            <span class="device-meta device-ip-text">연결안됨</span>
+            <span class="device-status hidden">연결됨!</span>
+            <button class="trash-btn" data-slot="4" disabled>Disconnect</button>
+          </div>
+        </div>
+      </div>
+      <div class="status" id="clientsStatus"></div>
+      <label style="margin-top:10px;">Selected Devices</label>
+      <div id="selectedDevices" class="selected-list"></div>
+    </div>
+
+    <div class="panel">
+      <h2>File Play</h2>
+      <label for="fileUrl">MP3 URL</label>
+      <input id="fileUrl" class="wide-input" type="text" placeholder="http://..." />
+      
+      <label for="storePolicy" style="margin-top:10px;">Store Policy</label>
+      <select id="storePolicy" style="width:100%; margin-bottom:10px;">
+        <option value="cache" selected>Cache (저장 후 재생)</option>
+        <option value="no-store">No Store (스트리밍)</option>
+      </select>
+      
+      <div class="row stack">
+        <button id="filePlayBtn">▶ Play Selected</button>
+        <button id="fileStopBtn" class="secondary">⏹ Stop Selected</button>
+      </div>
+      <div class="status" id="fileStatus"></div>
+    </div>
+
+    <div class="panel live-panel" id="livePanel">
+      <h2>LIVE Stream</h2>
+      
+      <label for="rtpPort">RTP Port (Default: 4000)</label>
+      <input id="rtpPort" type="number" value="4000" />
+      
+      <label for="audioDeviceSelect">Select Microphone</label>
+        <div class="row" style="gap:5px;">
+          <select id="audioDeviceSelect" style="flex:3">
+            <option value="">Scanning devices...</option>
+          </select>
+          <button id="applyLiveConfig" class="tiny secondary" style="flex:1">Save</button>
+        </div>
+
+      <label for="liveVolume">Live Volume</label>
+      <div class="range-row">
+        <input id="liveVolume" type="range" min="0" max="3" step="0.05" value="2.0" />
+        <span class="range-value" id="liveVolumeValue">2.00</span>
+      </div>
+
+      <div class="row stack">
+        <button id="liveStartBtn">▶ Start Live (Auto)</button>
+        <button id="liveStopBtn" class="secondary">⏹ Stop Live</button>
+      </div>
+      
+      <div class="live-signal">
+        <div class="live-dot"></div>
+        <div class="live-bars">
+          <span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="status live-indicator hidden" id="liveStatus">ON AIR</div>
+      </div>
+      <div class="status" id="liveMsg"></div>
+    </div>
+  </div>
+
+  <script>
+    // --- Global State ---
+    let httpBase = `${location.protocol}//${location.hostname}:${location.port || 8080}`;
+    let deviceList = [];        // 서버에서 받아온 전체 단말 리스트 [{id, ip}, ...]
+    let selectedDevices = new Set(); // 사용자가 클릭해서 선택한 단말 ID들
+
+    // --- DOM Elements ---
+    const httpBaseEl = document.getElementById("httpBase");
+    const wsUrlEl = document.getElementById("wsUrl");
+    const connCountEl = document.getElementById("connCount");
+    const deviceGridEl = document.getElementById("deviceGrid");
+    const selectedDevicesEl = document.getElementById("selectedDevices");
+    const fileStatusEl = document.getElementById("fileStatus");
+    const liveMsgEl = document.getElementById("liveMsg");
+    const liveStatusEl = document.getElementById("liveStatus");
+    const livePanelEl = document.getElementById("livePanel");
+    const liveStopBtn = document.getElementById("liveStopBtn");
+    const liveVolumeEl = document.getElementById("liveVolume");
+    const liveVolumeValueEl = document.getElementById("liveVolumeValue");
+    
+    // [중요] 새로 추가된 오디오 선택창 엘리먼트
+    const audioSelectEl = document.getElementById("audioDeviceSelect");
+
+    // --- Audio Device Fetch ---
+    async function fetchAudioDevices() {
+        const select = document.getElementById("audioDeviceSelect");
+        try {
+            const res = await fetch("/api/audio_devices");
+            if (!res.ok) throw new Error("Fetch failed");
+            
+            const devices = await res.json();
+            select.innerHTML = ""; // 초기화
+            
+            if (devices.length === 0) {
+                select.innerHTML = '<option value="">No devices found</option>';
+                return;
+            }
+
+            devices.forEach(dev => {
+                const opt = document.createElement("option");
+                opt.value = dev.index; // 번호를 value로 사용
+                opt.innerText = `[ID: ${dev.index}] ${dev.name}`;
+                select.appendChild(opt);
+            });
+
+            // 기존에 저장된 설정이 있다면 선택 상태로 만들기
+            const cfgRes = await fetch("/api/live_config").catch(()=>null);
+            if (cfgRes && cfgRes.ok) {
+                const cfg = await cfgRes.json();
+                if (cfg.input_device !== undefined) {
+                    select.value = cfg.input_device;
+                }
+            }
+        } catch (e) {
+            console.error("Failed to load audio devices:", e);
+            select.innerHTML = '<option value="">Failed to load devices</option>';
+        }
+    }
+
+    // --- Initialization ---
+    async function init() {
+        const res = await fetch("/api/server_info").catch(()=>null);
+        if(res && res.ok) {
+            const info = await res.json();
+            const host = info.public_host || location.hostname;
+            httpBase = `${location.protocol}//${host}:${info.http_port}`;
+            httpBaseEl.textContent = httpBase;
+            wsUrlEl.textContent = `ws://${host}:${info.ws_port}`;
+            document.getElementById("fileUrl").value = `${httpBase}/media/voice001.mp3`;
+        } else {
+            httpBaseEl.textContent = httpBase;
+            wsUrlEl.textContent = `ws://${location.hostname}:9001`;
+        }
+        
+        // 장치 목록 로드
+        await fetchAudioDevices();
+        refreshDevices();
+        setInterval(refreshDevices, 2000); // 2초마다 갱신 (10초는 너무 김)
+    }
+
+    // --- Device Management ---
+    async function refreshDevices() {
+        try {
+            const res = await fetch("/api/devices");
+            if(!res.ok) throw new Error("API Error");
+            const newList = await res.json();
+            
+            if(JSON.stringify(newList) !== JSON.stringify(deviceList)) {
+                deviceList = newList;
+                renderDeviceGrid();
+            }
+            connCountEl.textContent = deviceList.length;
+        } catch(e) {
+            console.error("Failed to fetch devices");
+        }
+    }
+
+    function renderSelectedDevices() {
+        selectedDevicesEl.innerHTML = "";
+        const selected = deviceList.filter(d => selectedDevices.has(d.id));
+        if (selected.length === 0) {
+            selectedDevicesEl.innerHTML = '<span class="muted">선택된 단말 없음</span>';
+            return;
+        }
+        selected.forEach(dev => {
+            const pill = document.createElement("div");
+            pill.className = "selected-pill";
+            pill.innerHTML = `
+                <span>${dev.ip || "unknown"}</span>
+                <button class="pill-remove" title="Remove">✕</button>
+            `;
+            pill.querySelector(".pill-remove").onclick = () => {
+                selectedDevices.delete(dev.id);
+                renderDeviceGrid();
+                renderSelectedDevices();
+            };
+            selectedDevicesEl.appendChild(pill);
+        });
+    }
+
+    function renderDeviceGrid() {
+        const rows = deviceGridEl.querySelectorAll(".device-row");
+
+        const visibleDevices = deviceList.slice(0, rows.length);
+        const activeIds = new Set(visibleDevices.map(d => d.id));
+        for (const id of Array.from(selectedDevices)) {
+            if (!activeIds.has(id)) selectedDevices.delete(id);
+        }
+
+        rows.forEach((row, idx) => {
+            const dev = visibleDevices[idx];
+            const ipText = row.querySelector(".device-ip-text");
+            const statusText = row.querySelector(".device-status");
+            const trashBtn = row.querySelector(".trash-btn");
+
+            if (dev) {
+                ipText.textContent = dev.ip || "unknown";
+                statusText.classList.remove("hidden");
+                row.classList.add("connected");
+                row.classList.toggle("selected", selectedDevices.has(dev.id));
+                row.onclick = () => {
+                    if (selectedDevices.has(dev.id)) {
+                        selectedDevices.delete(dev.id);
+                        row.classList.remove("selected");
+                    } else {
+                        selectedDevices.add(dev.id);
+                        row.classList.add("selected");
+                    }
+                    renderSelectedDevices();
+                };
+                trashBtn.disabled = false;
+                trashBtn.onclick = async (event) => {
+                    event.stopPropagation();
+                    if (!confirm(`${dev.id} 연결을 끊을까요?`)) return;
+                    await fetch("/api/disconnect", {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({ deviceId: dev.id })
+                    });
+                    refreshDevices();
+                };
+            } else {
+                ipText.textContent = "연결안됨";
+                statusText.classList.add("hidden");
+                row.classList.remove("connected", "selected");
+                row.onclick = null;
+                trashBtn.disabled = true;
+                trashBtn.onclick = null;
+            }
+        });
+        renderSelectedDevices();
+    }
+
+    // --- Command Sender Helper ---
+    async function sendToSelected(endpoint, payload = {}, statusEl) {
+        if (selectedDevices.size === 0) {
+            alert("먼저 단말을 선택해주세요!");
+            return;
+        }
+
+        setStatus(statusEl, `Sending to ${selectedDevices.size} devices...`);
+
+        for (const deviceId of selectedDevices) {
+            const device = deviceList.find(d => d.id === deviceId);
+            if (!device) continue;
+
+            const body = { deviceId, ip: device.ip, ...payload };
+
+            try {
+                await fetch(endpoint, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                });
+            } catch (e) {
+                console.error(`Failed to send to ${deviceId}`, e);
+            }
+        }
+        setStatus(statusEl, "Command Sent!");
+    }
+
+    function setStatus(el, text) {
+        if(!el) return;
+        el.textContent = text;
+        setTimeout(() => { if (el.textContent === text) el.textContent = ""; }, 3000);
+    }
+
+    // --- Button Event Listeners ---
+
+    document.getElementById("refreshClients").onclick = refreshDevices;
+
+    document.getElementById("filePlayBtn").onclick = () => {
+        const url = document.getElementById("fileUrl").value;
+        const policy = document.getElementById("storePolicy").value; // [수정] policy 변수 정의
+        if (!url) return alert("URL을 입력하세요");
+        sendToSelected("/api/file_play", { 
+            url: url, 
+            store_policy: policy 
+        }, fileStatusEl);
+    };
+
+    document.getElementById("fileStopBtn").onclick = () => {
+        sendToSelected("/api/file_stop", {}, fileStatusEl);
+    };
+
+    document.getElementById("liveStartBtn").onclick = () => {
+        if (selectedDevices.size === 0) {
+            alert("먼저 단말을 선택해주세요!");
+            return;
+        }
+        const port = Number(document.getElementById("rtpPort").value) || 4000;
+        const volume = Number(liveVolumeEl.value) || 1.0;
+        liveVolumeValueEl.textContent = Number(liveVolumeEl.value).toFixed(2);
+        liveStatusEl.classList.remove("hidden");
+        livePanelEl.classList.add("active");
+        liveStopBtn.classList.add("live-active");
+        sendToSelected("/api/live_start", { rtpPort: port, volume }, liveMsgEl);
+    };
+
+    document.getElementById("liveStopBtn").onclick = () => {
+        liveStatusEl.classList.add("hidden");
+        livePanelEl.classList.remove("active");
+        liveStopBtn.classList.remove("live-active");
+        sendToSelected("/api/live_stop", {}, liveMsgEl);
+    };
+
+    // [중요 수정] Mic Config Save 시 Select 박스의 값을 읽도록 수정
+    document.getElementById("applyLiveConfig").onclick = async () => {
+        const selectedIndex = audioSelectEl.value; // audioDevice 입력창이 아닌 Select 박스 참조
+        if (selectedIndex === "") return alert("마이크를 먼저 선택하세요.");
+
+        await fetch("/api/live_config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ input_device: selectedIndex })
+        });
+        alert("마이크 설정 저장됨");
+    };
+
+    liveVolumeEl.addEventListener("input", () => {
+        liveVolumeValueEl.textContent = Number(liveVolumeEl.value).toFixed(2);
+    });
+
+    init();
+</script>
+</body>
+</html>
+<!-- <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PC Demo Server</title>
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap");
@@ -477,4 +1196,4 @@
     init();
   </script>
 </body>
-</html>
+</html> -->
