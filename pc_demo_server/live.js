@@ -2,6 +2,7 @@
 
 const { spawn } = require("child_process");
 const path = require("path");
+const fs = require("fs");
 
 const DEFAULT_FRAME_MS = 20;
 const DEFAULT_SAMPLE_RATE = 16000;
@@ -17,6 +18,14 @@ function startLiveStream(key, rtpIp, rtpPort, frameMs, config, volume) {
     return;
   }
 
+  const isPkg = !!process.pkg;
+  const baseDir = isPkg ? path.dirname(process.execPath) : __dirname;
+  const exeName = process.platform === "win32" ? "mic_sender.exe" : "mic_sender";
+  const defaultExePath = path.join(baseDir, exeName);
+  const configuredExePath = config.micSenderBin ? path.resolve(config.micSenderBin) : "";
+  const exePath = configuredExePath && fs.existsSync(configuredExePath)
+    ? configuredExePath
+    : (fs.existsSync(defaultExePath) ? defaultExePath : "");
   const pythonScript = path.join(__dirname, "mic_sender.py");
   
   // 파이썬에 전달할 인자: IP, Port, Device ID (아까 찾은 마이크 번호, config에서 가져옴)
@@ -24,18 +33,26 @@ function startLiveStream(key, rtpIp, rtpPort, frameMs, config, volume) {
   const micDeviceIndex = config.liveInputDevice || "1"; 
 
   const volumeValue = Number.isFinite(Number(volume)) ? String(volume) : "2.0";
-  const args = [
-    pythonScript,
+  const baseArgs = [
     "--ip", rtpIp,
     "--port", String(rtpPort),
     "--device", micDeviceIndex,
     "--volume", volumeValue
   ];
 
-  const pythonBin = process.platform === "win32" ? "python" : "python3";
-  console.log(`[Live] Spawning: ${pythonBin} ${args.join(" ")}`);
+  let execCmd;
+  let execArgs;
+  if (exePath) {
+    execCmd = exePath;
+    execArgs = baseArgs;
+  } else {
+    execCmd = process.platform === "win32" ? "python" : "python3";
+    execArgs = [pythonScript, ...baseArgs];
+  }
 
-  const proc = spawn(pythonBin, args, { stdio: ["ignore", "pipe", "pipe"] });
+  console.log(`[Live] Spawning: ${execCmd} ${execArgs.join(" ")}`);
+
+  const proc = spawn(execCmd, execArgs, { cwd: baseDir, stdio: ["ignore", "pipe", "pipe"] });
 
   proc.stdout.on("data", (data) => {
     // 파이썬 정상 로그는 너무 많을 수 있으니 필요하면 주석 해제

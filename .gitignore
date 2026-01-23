@@ -1,11 +1,66 @@
+# ---------------------------------
+# 1. Node.js & General Logs
+# ---------------------------------
 node_modules/
-dist/
-build/
 coverage/
 .cache/
 *.log
-.DS_Store
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# ---------------------------------
+# 2. Python & Virtual Envs
+# ---------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+# 가상환경 폴더 (혹시 사용한다면)
+venv/
+env/
+.env
+
+# ---------------------------------
+# 3. Build Artifacts (빌드 찌꺼기들)
+# ---------------------------------
+# PyInstaller & pkg가 만드는 폴더
+build/
+dist/
+
+# Inno Setup이 만드는 설치파일 저장 폴더
+Output/
+
+# 배포를 위해 임시로 모아둔 폴더 (v1.0, v2.0 등 모두 무시)
+AudioServer_v*/
+
+# ---------------------------------
+# 4. Binary & Executables (실행 파일)
+# ---------------------------------
+# 소스코드 저장소에 exe 파일을 올리면 용량이 폭발합니다.
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 외부에서 다운로드한 FFmpeg도 무시
+ffmpeg.exe
+
+# 압축 파일들
+*.zip
+*.7z
+*.rar
+
+# ---------------------------------
+# 5. Tool Specific Configs
+# ---------------------------------
+# PyInstaller 설정 파일 (필요시 주석 해제하여 Push 가능)
+*.spec
+
+# OS 관련 잡동사니
+.DS_Store
+Thumbs.db
+
+# IDE 설정 (VSCode 등)
+.vscode/
+.idea/

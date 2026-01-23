@@ -4,6 +4,7 @@ const http = require("http");
 const express = require("express");
 const WebSocket = require("ws");
 const readline = require("readline");
+const { exec } = require("child_process");
 
 const config = require("./config");
 const live = require("./live");
@@ -30,6 +31,10 @@ app.use("/", express.static(config.publicDir));
 const httpServer = http.createServer(app);
 httpServer.listen(config.httpPort, config.host, () => {
   console.log(`[HTTP] listening on ${config.host}:${config.httpPort}, media=${config.mediaDir}`);
+  const url = `http://localhost:${config.httpPort}`;
+  if (process.platform === "win32") {
+    exec(`start "" "${url}"`);
+  }
 });
 
 // WebSocket server (control plane)
